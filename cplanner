@@ -1,0 +1,1294 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SharkEN APP Planner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        @import url('https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap');
+        body {
+            font-family: 'Poppins', 'General Sans', sans-serif;
+            background-color: #004aad;
+            color: #ffffff;
+        }
+        .tab-button.active {
+            background-color: #ffffff;
+            color: #004aad;
+        }
+        .loading-spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 4px solid #ffffff;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .post-card {
+            background-color: #f3f4f6;
+            transition: transform 0.2s, box-shadow 0.2s;
+            color: #1f2937;
+        }
+        .post-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1);
+        }
+        .post-card-scheduled {
+            border: 2px solid #22c55e;
+            box-shadow: 0 4px 6px -1px rgba(34, 197, 94, 0.5), 0 2px 4px -1px rgba(34, 197, 94, 0.25);
+        }
+        .month-button, .week-button {
+            transition: all 0.2s ease-in-out;
+            background-color: #d1d5db;
+            color: #1f2937;
+        }
+        .month-button.active, .week-button.active {
+            background-color: #ffffff;
+            color: #004aad;
+            transform: scale(1.05);
+        }
+        #content-nav.visible-container {
+            max-height: 200px;
+            padding-bottom: 1.5rem;
+        }
+        #content-nav {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-in-out;
+        }
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+            gap: 1rem;
+        }
+        .day-header {
+            text-align: center;
+            font-weight: 600;
+            color: #4b5563;
+        }
+        .day-cell {
+            min-height: 120px;
+            background-color: #ffffff;
+            color: #004aad;
+        }
+        .category-item {
+            background-color: #d1d5db;
+            color: #1f2937;
+            transition: background-color 0.2s, color 0.2s;
+        }
+        .alert-box {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            background-color: #ef4444;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 9999px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+            transform: translateX(120%);
+            opacity: 0;
+            z-index: 100;
+        }
+        .alert-box.show {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        .category-progress-bar {
+            height: 1.5rem;
+            border-radius: 9999px;
+            transition: width 0.5s ease-in-out;
+        }
+        .date-picker-button {
+            background-color: #f3f4f6;
+            color: #1f2937;
+            transition: background-color 0.2s;
+        }
+        .date-picker-button.selected {
+            background-color: #004aad;
+            color: white;
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body class="bg-[#004aad] flex flex-col min-h-screen">
+    <div id="loading-screen" class="fixed inset-0 flex flex-col items-center justify-center bg-[#004aad] z-[100] transition-opacity duration-300">
+        <div class="loading-spinner mb-4"></div>
+        <p class="text-white text-lg">Memuat...</p>
+    </div>
+
+    <div id="login-screen" class="hidden flex flex-col items-center justify-center p-8 bg-gray-800 rounded-xl shadow-lg m-auto w-full max-w-sm">
+        <h2 class="text-3xl font-bold text-white mb-6">Masuk ke Aplikasi</h2>
+        <input type="email" id="email-input" placeholder="Email" class="w-full p-3 mb-4 rounded-lg bg-gray-900 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <input type="password" id="password-input" placeholder="Password" class="w-full p-3 mb-6 rounded-lg bg-gray-900 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <button id="login-button" class="w-full p-3 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-bold transition-transform transform hover:scale-105">
+            Masuk
+        </button>
+        <p id="login-message" class="text-red-400 mt-4 hidden"></p>
+        <p class="text-xs text-gray-400 mt-4 text-center">
+            Gunakan kredensial ini untuk demo:<br>
+            <span class="font-semibold text-white">Admin:</span> admin@example.com / password123<br>
+            <span class="font-semibold text-white">Pengguna:</span> user@example.com / password123
+        </p>
+    </div>
+    
+    <div id="main-app" class="hidden flex-1 flex flex-col">
+        <header class="bg-[#ffffff] shadow-lg p-4 flex justify-between items-center z-10 sticky top-0">
+            <h1 class="text-2xl font-bold text-[#004aad]">Content Planner APP</h1>
+            <div class="flex items-center space-x-4">
+                <span id="user-info" class="text-[#004aad] text-sm font-semibold"></span>
+                <button id="logout-button" class="px-4 py-2 bg-red-500 text-white rounded-lg font-semibold hover:bg-red-600 transition-colors duration-200">
+                    Keluar
+                </button>
+            </div>
+        </header>
+        
+        <main class="flex-1 flex flex-col p-4 relative">
+            <div class="bg-[#ffffff] rounded-xl shadow-lg p-6 flex-1 flex flex-col">
+                <nav class="flex justify-between items-center mb-6">
+                    <div class="flex space-x-2 md:space-x-4">
+                        <button id="dashboard-tab" data-tab="dashboard" class="tab-button px-4 py-2 rounded-lg font-semibold transition-colors duration-200 text-[#004aad] hover:bg-gray-200">Dasbor</button>
+                        <button id="content-tab" data-tab="content" class="tab-button px-4 py-2 rounded-lg font-semibold transition-colors duration-200 text-[#004aad] hover:bg-gray-200">Konten</button>
+                        <button id="analytics-tab" data-tab="analytics" class="tab-button px-4 py-2 rounded-lg font-semibold transition-colors duration-200 text-[#004aad] hover:bg-gray-200">Analitik</button>
+                        <button id="report-tab" data-tab="report" class="tab-button px-4 py-2 rounded-lg font-semibold transition-colors duration-200 text-[#004aad] hover:bg-gray-200">Laporan</button>
+                        <button id="usage-tab" data-tab="usage" class="tab-button px-4 py-2 rounded-lg font-semibold transition-colors duration-200 text-[#004aad] hover:bg-gray-200">Penggunaan</button>
+                    </div>
+                    <button id="add-content-button" class="px-4 py-2 bg-[#004aad] text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors duration-200 hidden">
+                        + Tambah Konten
+                    </button>
+                </nav>
+
+                <div id="content-nav" class="justify-center mb-6 transition-all duration-300">
+                    <div id="month-buttons" class="flex flex-wrap justify-center gap-2"></div>
+                    <div id="week-buttons" class="flex flex-wrap justify-center gap-2 mt-2"></div>
+                </div>
+
+                <div id="content-display" class="flex-1 overflow-auto transition-all duration-300">
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal Utama untuk Konten -->
+    <div id="modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl shadow-xl max-w-2xl w-full p-8 relative overflow-hidden transform transition-all sm:my-8 sm:w-full sm:max-w-xl">
+            <h3 id="modal-title" class="text-3xl font-bold text-[#004aad] mb-4 text-center">Detail Konten</h3>
+            <p id="modal-date" class="text-sm text-gray-500 text-center mb-2"></p>
+            <p id="modal-status" class="text-sm font-semibold text-center mb-6"></p>
+            <div class="space-y-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Judul</label>
+                    <input type="text" id="title-input" class="text-[#004aad] mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Konten</label>
+                    <div id="content-text" contenteditable="true" class="text-[#004aad] mt-1 p-3 border border-gray-300 rounded-md bg-gray-50 h-32 overflow-y-auto text-sm text-gray-600 leading-relaxed whitespace-pre-wrap"></div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Caption <span class="text-xs text-red-500">(Opsional)</span></label>
+                    <textarea id="caption-input" rows="4" class="text-[#004aad] mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50 text-sm"></textarea>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Hashtags <span class="text-xs text-red-500">(Opsional, dipisahkan koma)</span></label>
+                    <input type="text" id="hashtag-input" class="text-[#004aad] mt-1 block w-full rounded-md border-gray-300 shadow-sm p-3 focus:border-blue-500 focus:ring focus:ring-blue-500 focus:ring-opacity-50">
+                </div>
+            </div>
+            <div class="mt-8 flex justify-end gap-3">
+                <button id="close-modal-button" class="px-6 py-3 border border-gray-300 text-gray-700 rounded-full font-semibold hover:bg-gray-100 transition-colors duration-200">
+                    Batal
+                </button>
+                <button id="delete-content-button" class="hidden px-6 py-3 bg-red-500 text-white rounded-full font-semibold hover:bg-red-600 transition-colors duration-200">
+                    Hapus
+                </button>
+                <button id="save-content-button" class="px-6 py-3 bg-blue-500 text-white rounded-full font-semibold hover:bg-blue-600 transition-colors duration-200">
+                    Simpan
+                </button>
+                <button id="schedule-content-button" class="px-6 py-3 bg-green-500 text-white rounded-full font-semibold hover:bg-green-600 transition-colors duration-200">
+                    Jadwalkan
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal untuk Pilih Tanggal -->
+    <div id="date-picker-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full p-8 relative overflow-hidden transform transition-all">
+            <h3 class="text-3xl font-bold text-[#004aad] mb-6 text-center">Pilih Tanggal Konten</h3>
+            <div class="text-[#004aad]">
+                <div class="flex items-center justify-between mb-4">
+                    <button id="prev-month" class="px-2 py-1 rounded-full text-blue-600 hover:bg-blue-100">&lt; Prev</button>
+                    <h4 id="month-year-label" class="text-xl font-semibold"></h4>
+                    <button id="next-month" class="px-2 py-1 rounded-full text-blue-600 hover:bg-blue-100">Next &gt;</button>
+                </div>
+                <div class="grid grid-cols-7 gap-2 text-center text-sm mb-4">
+                    <div class="font-bold text-gray-500">Sen</div>
+                    <div class="font-bold text-gray-500">Sel</div>
+                    <div class="font-bold text-gray-500">Rab</div>
+                    <div class="font-bold text-gray-500">Kam</div>
+                    <div class="font-bold text-gray-500">Jum</div>
+                    <div class="font-bold text-gray-500">Sab</div>
+                    <div class="font-bold text-gray-500">Min</div>
+                </div>
+                <div id="date-picker-grid" class="grid grid-cols-7 gap-2"></div>
+            </div>
+            <div class="mt-8 flex justify-end gap-3">
+                <button id="close-date-picker-modal" class="px-6 py-3 border border-gray-300 text-gray-700 rounded-full font-semibold hover:bg-gray-100 transition-colors duration-200">
+                    Batal
+                </button>
+                <button id="create-content-button" class="px-6 py-3 bg-blue-500 text-white rounded-full font-semibold hover:bg-blue-600 transition-colors duration-200 hidden">
+                    Buat Konten
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="message-box" class="fixed top-20 left-1/2 -translate-x-1/2 bg-green-500 text-white text-center py-2 px-6 rounded-full shadow-lg z-50 transition-opacity duration-300 ease-in-out opacity-0">
+        Pesan berhasil
+    </div>
+    <div id="late-alert" class="alert-box">
+        Segera hubungi ketua divisi anda untuk berbicara 1v1.
+    </div>
+    
+    <!-- Modals untuk Analitik -->
+    <div id="analytics-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl shadow-xl max-w-2xl w-full p-8 relative">
+            <h3 class="text-3xl font-bold text-[#004aad] mb-6 text-center">Edit Data Analitik</h3>
+            <div id="analytics-edit-form" class="space-y-4 text-[#004aad]">
+                <h4 class="text-xl font-semibold mt-4">Instagram</h4>
+                <div class="flex flex-col md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-4">
+                    <label class="font-medium w-32">Pengikut:</label>
+                    <input type="number" id="ig-followers" class="w-full p-2 border rounded-md">
+                </div>
+                <div class="flex flex-col md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-4">
+                    <label class="font-medium w-32">Total Views:</label>
+                    <input type="number" id="ig-views" class="w-full p-2 border rounded-md">
+                </div>
+                <div class="flex flex-col md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-4">
+                    <label class="font-medium w-32">Total Likes:</label>
+                    <input type="number" id="ig-likes" class="w-full p-2 border rounded-md">
+                </div>
+                <div class="flex flex-col md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-4">
+                    <label class="font-medium w-32">Total Komentar:</label>
+                    <input type="number" id="ig-comments" class="w-full p-2 border rounded-md">
+                </div>
+
+                <h4 class="text-xl font-semibold mt-6">TikTok</h4>
+                <div class="flex flex-col md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-4">
+                    <label class="font-medium w-32">Pengikut:</label>
+                    <input type="number" id="tt-followers" class="w-full p-2 border rounded-md">
+                </div>
+                <div class="flex flex-col md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-4">
+                    <label class="font-medium w-32">Total Views:</label>
+                    <input type="number" id="tt-views" class="w-full p-2 border rounded-md">
+                </div>
+                <div class="flex flex-col md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-4">
+                    <label class="font-medium w-32">Total Likes:</label>
+                    <input type="number" id="tt-likes" class="w-full p-2 border rounded-md">
+                </div>
+                <div class="flex flex-col md:flex-row md:items-center space-y-2 md:space-y-0 md:space-x-4">
+                    <label class="font-medium w-32">Total Komentar:</label>
+                    <input type="number" id="tt-comments" class="w-full p-2 border rounded-md">
+                </div>
+            </div>
+
+            <div class="mt-8 flex justify-end gap-3">
+                <button id="close-analytics-modal" class="px-6 py-3 border border-gray-300 text-gray-700 rounded-full font-semibold hover:bg-gray-100 transition-colors duration-200">
+                    Batal
+                </button>
+                <button id="save-analytics-button" class="px-6 py-3 bg-blue-500 text-white rounded-full font-semibold hover:bg-blue-600 transition-colors duration-200">
+                    Simpan
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let contentPlan = JSON.parse(localStorage.getItem('contentPlan')) || [];
+        let scheduledPosts = new Set(JSON.parse(localStorage.getItem('scheduledPosts')) || []);
+        let reportData = JSON.parse(localStorage.getItem('reportData')) || [];
+        let analyticsData = JSON.parse(localStorage.getItem('analyticsData')) || {};
+        let currentUser = null;
+        let userRole = null;
+        let currentDatePickerDate = new Date();
+        let selectedDate = null;
+
+        const CURRENT_YEAR = new Date().getFullYear();
+        const categories = ['Motivasi', 'Sambat', 'Tips Harian', 'Fakta Menarik', 'Tanya Jawab', 'Rekomendasi', 'Kisah Inspiratif', 'Penggunaan'];
+        const DAYS_OF_WEEK = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+        const MONTHS = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+
+        const loadingScreen = document.getElementById('loading-screen');
+        const loginScreen = document.getElementById('login-screen');
+        const mainApp = document.getElementById('main-app');
+        const loginButton = document.getElementById('login-button');
+        const logoutButton = document.getElementById('logout-button');
+        const emailInput = document.getElementById('email-input');
+        const passwordInput = document.getElementById('password-input');
+        const loginMessage = document.getElementById('login-message');
+        const userInfoSpan = document.getElementById('user-info');
+        const addContentButton = document.getElementById('add-content-button');
+
+        const tabButtons = document.querySelectorAll('.tab-button');
+        const contentDisplay = document.getElementById('content-display');
+        const modal = document.getElementById('modal');
+        const messageBox = document.getElementById('message-box');
+        const contentNavContainer = document.getElementById('content-nav');
+        const monthButtonsContainer = document.getElementById('month-buttons');
+        const weekButtonsContainer = document.getElementById('week-buttons');
+        const lateAlert = document.getElementById('late-alert');
+        const deleteContentButton = document.getElementById('delete-content-button');
+        const analyticsModal = document.getElementById('analytics-modal');
+        const saveAnalyticsButton = document.getElementById('save-analytics-button');
+
+        const datePickerModal = document.getElementById('date-picker-modal');
+        const monthYearLabel = document.getElementById('month-year-label');
+        const datePickerGrid = document.getElementById('date-picker-grid');
+        const createContentButton = document.getElementById('create-content-button');
+
+        const dummyUsers = {
+            'admin@example.com': { password: 'password123', role: 'admin' },
+            'user@example.com': { password: 'password123', role: 'user' }
+        };
+
+        function showMessage(message, isError = false) {
+            messageBox.textContent = message;
+            messageBox.style.backgroundColor = isError ? '#dc2626' : '#10b981';
+            messageBox.style.opacity = '1';
+            setTimeout(() => {
+                messageBox.style.opacity = '0';
+            }, 3000);
+        }
+
+        function updateUIForAuth(isLoggedIn) {
+            if (isLoggedIn) {
+                loginScreen.classList.add('hidden');
+                mainApp.classList.remove('hidden');
+                userInfoSpan.textContent = `Masuk sebagai: ${currentUser.email} (${userRole})`;
+                document.getElementById('dashboard-tab').click();
+            } else {
+                loginScreen.classList.remove('hidden');
+                mainApp.classList.add('hidden');
+                userInfoSpan.textContent = '';
+                addContentButton.classList.add('hidden');
+            }
+            loadingScreen.classList.add('hidden');
+        }
+
+        function handleLogin() {
+            const email = emailInput.value;
+            const password = passwordInput.value;
+            const user = dummyUsers[email];
+
+            if (user && user.password === password) {
+                currentUser = { email: email };
+                userRole = user.role;
+                localStorage.setItem('currentUser', JSON.stringify(currentUser));
+                localStorage.setItem('userRole', userRole);
+                updateUIForAuth(true);
+                loginMessage.classList.add('hidden');
+                showMessage(`Selamat datang, ${email}!`);
+            } else {
+                loginMessage.textContent = 'Login gagal. Periksa email dan password Anda.';
+                loginMessage.classList.remove('hidden');
+            }
+        }
+
+        function handleLogout() {
+            currentUser = null;
+            userRole = null;
+            localStorage.removeItem('currentUser');
+            localStorage.removeItem('userRole');
+            updateUIForAuth(false);
+            showMessage("Berhasil keluar.");
+        }
+
+        function generatePost(month, day, category, postNumber) {
+            const date = new Date(CURRENT_YEAR, month, day);
+            const dayName = DAYS_OF_WEEK[(date.getDay() + 6) % 7];
+            let title = '';
+            let content = '';
+            let caption = '';
+            let hashtags = '';
+            const id = crypto.randomUUID();
+
+            switch (category) {
+                case 'Motivasi':
+                    title = `Motivasi: Semangat ${dayName} #${id.slice(0, 4)}`;
+                    content = `Jangan biarkan hari ini terlewat begitu saja. Mulailah dengan semangat baru dan buatlah perubahan kecil yang bermakna. ${dayName} ini adalah awal yang baik!`;
+                    caption = `Awali harimu dengan senyum dan semangat! 🎉 Setiap langkah kecil adalah bagian dari perjalanan besar. Jangan pernah ragu untuk mencoba. #Motivasi #SelfImprovement #GenZ #Inspirasi #Semangat`;
+                    hashtags = '#Motivasi #SelfImprovement #GenZ #Inspirasi #Semangat';
+                    break;
+                case 'Sambat':
+                    title = `Sambat: Beban Hidup Hari ${dayName} #${id.slice(0, 4)}`;
+                    content = `Rasanya kok berat banget ya hari ini. Beban tugas dan deadline numpuk. Ada yang sama?`;
+                    caption = `Kenapa hidup penuh sambat? 😭 Padahal pengen rebahan aja, tapi tugas gak bisa nunggu. Coba komen, apa yang paling bikin kalian sambat hari ini? #Sambat #Curhat #Deadline #GenZ #Galaubrutal`;
+                    hashtags = '#Sambat #Kehidupan #Curhat #GenZ';
+                    break;
+                case 'Tips Harian':
+                    title = `Tips Harian: Produktivitas #${id.slice(0, 4)}`;
+                    content = `Mencoba metode Pomodoro untuk fokus saat belajar atau bekerja bisa sangat efektif. Gunakan timer 25 menit, lalu istirahat 5 menit!`;
+                    caption = `Butuh cara buat lebih produktif? Coba teknik Pomodoro! 💡 Ini bisa bantu kamu fokus dan selesaikan tugas tanpa burnout. #TipsProduktivitas #TipsBelajar #GenZ #Fokus`;
+                    hashtags = '#Tips #Produktivitas #Belajar #GenZ';
+                    break;
+                case 'Fakta Menarik':
+                    title = `Fakta Unik Hari Ini #${id.slice(0, 4)}`;
+                    content = `Tahukah kamu? Rata-rata orang menghabiskan 6 bulan dari hidupnya hanya menunggu lampu lalu lintas berubah menjadi hijau.`;
+                    caption = `Fakta unik hari ini! ✨ Udah pernah ngitung berapa lama kamu nungguin lampu merah? #FaktaUnik #GenZFacts #TahukahKamu #PengetahuanUmum`;
+                    hashtags = '#Fakta #Unik #Trivia #GenZFacts';
+                    break;
+                case 'Tanya Jawab':
+                    title = `QnA: Kehidupan Kampus #${id.slice(0, 4)}`;
+                    content = `Apa tantangan terbesar yang kamu hadapi di kampus saat ini?`;
+                    caption = `Kita sharing yuk! 🤔 Komen di bawah, apa sih tantangan terbesar yang lagi kalian hadapin di kehidupan kampus sekarang? #TanyaJawab #Mahasiswa #GenZLife #KampusLife`;
+                    hashtags = '#TanyaJawab #QnA #GenZ #Mahasiswa';
+                    break;
+                case 'Rekomendasi':
+                    title = `Rekomendasi Film #${id.slice(0, 4)}`;
+                    content = `Mencari film yang bisa membuatmu terinspirasi? Coba nonton "The Pursuit of Happyness".`;
+                    caption = `Butuh tontonan yang memotivasi? 🍿 "The Pursuit of Happyness" wajib masuk watchlist kamu! Film ini bakal bikin kamu semangat lagi. #RekomendasiFilm #NontonApa #FilmInspiratif #GenZ`;
+                    hashtags = '#Rekomendasi #Film #MovieNight #GenZ';
+                    break;
+                case 'Kisah Inspiratif':
+                    title = `Kisah Inspiratif #${id.slice(0, 4)}`;
+                    content = `Kisah sukses seorang anak muda yang berhasil membangun bisnisnya dari nol di usia 20 tahun. Ia memulai dengan modal minim, hanya bermodalkan semangat dan koneksi.`;
+                    caption = `Terinspirasi dari kisah nyata: perjalanan seorang anak muda yang membuktikan usia bukan halangan untuk sukses. 💪 Siapa yang jadi motivasi kamu? #KisahSukses #Inspirasi #GenZpreneur #Motivation`;
+                    hashtags = '#KisahInspiratif #SuksesMuda #GenZ #Motivasi';
+                    break;
+                case 'Penggunaan':
+                    title = `Penggunaan Warna ${dayName} #${id.slice(0, 4)}`;
+                    content = `Untuk desain hari ini, kita akan menggunakan latar belakang putih dengan teks berwarna biru gelap. Kombinasi ini memberikan kesan bersih, profesional, dan modern yang sangat cocok untuk audiens Gen Z.`;
+                    caption = `Desain simple, visual kuat! 💡 Hari ini kita pakai kombinasi warna putih dan biru gelap. Elegan dan eye-catching! Siapa yang suka perpaduan ini? #Penggunaan #DesainGrafis #ColorPalette #GenZStyle`;
+                    hashtags = '#Penggunaan #DesainGrafis #GenZ #Aesthetic';
+                    break;
+            }
+
+            return {
+                id: crypto.randomUUID(),
+                title: title,
+                content: content,
+                caption: caption,
+                hashtags: hashtags,
+                category: category,
+                scheduled_date: new Date(CURRENT_YEAR, month, day).toISOString(),
+                time: postNumber === 1 ? '10:00' : '16:00',
+                day: dayName,
+                is_scheduled: false
+            };
+        }
+
+        function createInitialContentPlan() {
+            if (contentPlan.length > 0) return;
+            let postCounter = 0;
+            for (let month = 0; month < 12; month++) {
+                const daysInMonth = new Date(CURRENT_YEAR, month + 1, 0).getDate();
+                for (let day = 1; day <= daysInMonth; day++) {
+                    postCounter++;
+                    const category1 = categories[postCounter % categories.length];
+                    contentPlan.push(generatePost(month, day, category1, 1));
+                    
+                    postCounter++;
+                    const category2 = categories[postCounter % categories.length];
+                    contentPlan.push(generatePost(month, day, category2, 2));
+                }
+            }
+            localStorage.setItem('contentPlan', JSON.stringify(contentPlan));
+        }
+        
+        function createInitialAnalyticsData() {
+            if (Object.keys(analyticsData).length > 0) return;
+            analyticsData = {
+                instagram: {
+                    followers: 55000,
+                    total_views: 285000,
+                    total_likes: 42000,
+                    total_comments: 3100
+                },
+                tiktok: {
+                    followers: 78000,
+                    total_views: 1200000,
+                    total_likes: 95000,
+                    total_comments: 8700
+                }
+            };
+            localStorage.setItem('analyticsData', JSON.stringify(analyticsData));
+        }
+
+        function displayDashboard() {
+            const totalPosts = contentPlan.length;
+            const scheduledCount = scheduledPosts.size;
+            const unscheduledCount = totalPosts - scheduledCount;
+            const completionRate = totalPosts > 0 ? ((scheduledCount / totalPosts) * 100).toFixed(2) : 0;
+            
+            const categoryCounts = contentPlan.reduce((acc, post) => {
+                const category = post.category || 'Lainnya';
+                acc[category] = (acc[category] || 0) + 1;
+                return acc;
+            }, {});
+
+            const totalCategories = Object.values(categoryCounts).reduce((sum, count) => sum + count, 0);
+
+            let categoryProgressHTML = '';
+            for (const [category, count] of Object.entries(categoryCounts)) {
+                const percentage = totalCategories > 0 ? ((count / totalCategories) * 100).toFixed(2) : 0;
+                let barColor = 'bg-blue-500';
+                if (category === 'Motivasi') barColor = 'bg-green-500';
+                if (category === 'Sambat') barColor = 'bg-red-500';
+                if (category === 'Lainnya') barColor = 'bg-gray-500';
+                if (category === 'Penggunaan') barColor = 'bg-purple-500';
+
+
+                categoryProgressHTML += `
+                    <div class="mb-4">
+                        <div class="flex justify-between text-[#004aad]">
+                            <span class="font-semibold">${category}</span>
+                            <span class="font-semibold">${percentage}%</span>
+                        </div>
+                        <div class="bg-gray-200 rounded-full h-3">
+                            <div class="${barColor} h-3 rounded-full" style="width: ${percentage}%"></div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            contentDisplay.innerHTML = `
+                <div class="p-6 text-[#004aad]">
+                    <h2 class="text-3xl font-bold mb-6 text-center">Ringkasan Rencana Konten</h2>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div class="bg-white p-6 rounded-2xl shadow-lg text-center border border-gray-200">
+                            <h3 class="text-xl font-bold text-[#004aad] mb-2">Total Postingan</h3>
+                            <p class="text-5xl font-bold text-blue-600">${totalPosts}</p>
+                        </div>
+                        <div class="bg-white p-6 rounded-2xl shadow-lg text-center border border-gray-200">
+                            <h3 class="text-xl font-bold text-[#004aad] mb-2">Dijadwalkan</h3>
+                            <p class="text-5xl font-bold text-green-600">${scheduledCount}</p>
+                        </div>
+                        <div class="bg-white p-6 rounded-2xl shadow-lg text-center border border-gray-200">
+                            <h3 class="text-xl font-bold text-[#004aad] mb-2">Belum Dijadwalkan</h3>
+                            <p class="text-5xl font-bold text-red-600">${unscheduledCount}</p>
+                        </div>
+                        <div class="bg-white p-6 rounded-2xl shadow-lg text-center border border-gray-200">
+                            <h3 class="text-xl font-bold text-[#004aad] mb-2">Tingkat Penjadwalan</h3>
+                            <p class="text-5xl font-bold text-purple-600">${completionRate}%</p>
+                        </div>
+                    </div>
+                    <div class="mt-6 bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
+                        <h3 class="text-xl font-bold text-[#004aad] mb-4 text-center">Gambaran Performa Konten</h3>
+                        ${categoryProgressHTML}
+                    </div>
+                </div>
+            `;
+            contentNavContainer.classList.remove('visible-container');
+        }
+
+        function displayMonthButtons() {
+            monthButtonsContainer.innerHTML = '';
+            weekButtonsContainer.innerHTML = '';
+            
+            MONTHS.forEach((month, index) => {
+                const button = document.createElement('button');
+                button.textContent = month;
+                button.className = `month-button px-4 py-2 rounded-full font-semibold transition-colors duration-200`;
+                button.dataset.month = index;
+                button.addEventListener('click', () => {
+                    document.querySelectorAll('.month-button').forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+                    displayWeekButtons(index);
+                    contentDisplay.innerHTML = `<div class="p-6 text-center text-[#004aad]">
+                        <p class="text-lg font-semibold mb-4">Silakan pilih minggu untuk melihat kalender.</p>
+                    </div>`;
+                });
+                monthButtonsContainer.appendChild(button);
+            });
+            contentNavContainer.classList.add('visible-container');
+            addContentButton.classList.remove('hidden');
+        }
+
+        function displayWeekButtons(month) {
+            weekButtonsContainer.innerHTML = '';
+            const daysInMonth = new Date(CURRENT_YEAR, month + 1, 0).getDate();
+            const firstDayOfMonth = new Date(CURRENT_YEAR, month, 1);
+            const firstDayOfWeekIndex = (firstDayOfMonth.getDay() + 6) % 7;
+            
+            const totalDays = daysInMonth + firstDayOfWeekIndex;
+            const weeksInMonth = Math.ceil(totalDays / 7);
+
+            for (let week = 1; week <= weeksInMonth; week++) {
+                const button = document.createElement('button');
+                button.textContent = `Minggu ${week}`;
+                button.className = `week-button px-4 py-2 rounded-full font-semibold transition-colors duration-200`;
+                button.dataset.week = week;
+                button.addEventListener('click', () => {
+                    document.querySelectorAll('.week-button').forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+                    displayContent(month, week);
+                });
+                weekButtonsContainer.appendChild(button);
+            }
+        }
+
+        function displayContent(month, week) {
+            contentDisplay.innerHTML = '';
+            const year = new Date().getFullYear();
+            const daysOfWeek = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+
+            let calendarHTML = `
+                <div class="bg-white p-6 rounded-lg text-[#004aad]">
+                    <div class="calendar-grid text-sm mb-4">
+                        ${daysOfWeek.map(day => `<div class="day-header">${day}</div>`).join('')}
+                    </div>
+                    <div class="calendar-grid">
+            `;
+
+            const firstDayOfMonth = new Date(year, month, 1);
+            const firstDayOfWeekIndex = (firstDayOfMonth.getDay() + 6) % 7;
+            
+            const startDate = new Date(firstDayOfMonth);
+            startDate.setDate(firstDayOfMonth.getDate() - firstDayOfWeekIndex + (week - 1) * 7);
+
+            for (let i = 0; i < 7; i++) {
+                const d = new Date(startDate);
+                d.setDate(startDate.getDate() + i);
+                
+                const postsForDay = contentPlan.filter(post => 
+                    post.scheduled_date && 
+                    new Date(post.scheduled_date).getFullYear() === d.getFullYear() &&
+                    new Date(post.scheduled_date).getMonth() === d.getMonth() &&
+                    new Date(post.scheduled_date).getDate() === d.getDate()
+                );
+
+                calendarHTML += `
+                    <div class="day-cell rounded-lg p-3 shadow-md border border-gray-200">
+                        <div class="text-lg font-bold mb-2">${d.getDate()}</div>
+                        <div class="space-y-2">
+                            ${postsForDay.length > 0
+                                ? postsForDay.map(post => {
+                                    const isScheduled = post.is_scheduled;
+                                    const postCardClass = isScheduled ? 'bg-white p-2 rounded-lg post-card post-card-scheduled' : 'bg-white p-2 rounded-lg post-card';
+                                    return `
+                                        <div class="${postCardClass}" data-id="${post.id}">
+                                            <h4 class="text-sm font-semibold">${post.title}</h4>
+                                            <p class="text-xs text-gray-500 mt-1">${post.time}</p>
+                                        </div>
+                                    `;
+                                }).join('')
+                                : `<p class="text-gray-400 italic text-xs">Tidak ada konten.</p>`
+                            }
+                        </div>
+                    </div>
+                `;
+            }
+            
+            calendarHTML += `</div></div>`;
+            contentDisplay.innerHTML = calendarHTML;
+
+            contentDisplay.querySelectorAll('.post-card').forEach(card => {
+                card.addEventListener('click', () => {
+                    const postId = card.dataset.id;
+                    const post = contentPlan.find(p => p.id === postId);
+                    if (post) showModal(post);
+                });
+            });
+        }
+
+        function showModal(post) {
+            const modalStatus = document.getElementById('modal-status');
+            const scheduled = post.is_scheduled;
+            
+            lateAlert.classList.remove('show');
+            deleteContentButton.classList.add('hidden');
+
+            if (scheduled) {
+                const reportEntry = reportData.find(item => item.id === post.id);
+                if (reportEntry) {
+                    const postDate = new Date(reportEntry.post_date);
+                    const scheduledDateTime = new Date(post.scheduled_date);
+                    const isLate = postDate > scheduledDateTime;
+                    const formattedDate = postDate.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                    
+                    if (isLate) {
+                        modalStatus.textContent = `Terposting (${formattedDate}, terlambat)`;
+                        modalStatus.classList.remove('text-green-500');
+                        modalStatus.classList.add('text-red-500');
+                        lateAlert.classList.add('show');
+                    } else {
+                        modalStatus.textContent = `Terposting (${formattedDate}, tepat waktu)`;
+                        modalStatus.classList.remove('text-red-500');
+                        modalStatus.classList.add('text-green-500');
+                    }
+                }
+            } else {
+                modalStatus.textContent = 'Belum Dijadwalkan';
+                modalStatus.classList.remove('text-red-500', 'text-green-500');
+                modalStatus.classList.add('text-gray-500');
+            }
+            
+            document.getElementById('modal-title').textContent = post.title;
+            document.getElementById('modal-date').textContent = `${post.day}, ${new Date(post.scheduled_date).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' })} - ${post.time}`;
+            document.getElementById('title-input').value = post.title;
+            document.getElementById('content-text').textContent = post.content || 'Tidak ada konten';
+            document.getElementById('caption-input').value = post.caption || '';
+            document.getElementById('hashtag-input').value = post.hashtags || '';
+
+            const saveButton = document.getElementById('save-content-button');
+            const scheduleButton = document.getElementById('schedule-content-button');
+            
+            saveButton.dataset.id = post.id;
+            scheduleButton.dataset.id = post.id;
+            deleteContentButton.dataset.id = post.id;
+
+            if (scheduled) {
+                scheduleButton.textContent = 'Sudah Dijadwalkan';
+                scheduleButton.disabled = true;
+                scheduleButton.classList.remove('bg-green-500', 'hover:bg-green-600');
+                scheduleButton.classList.add('bg-gray-400');
+            } else {
+                scheduleButton.textContent = 'Jadwalkan';
+                scheduleButton.disabled = false;
+                scheduleButton.classList.remove('bg-gray-400');
+                scheduleButton.classList.add('bg-green-500', 'hover:bg-green-600');
+            }
+
+            if (userRole === 'admin') {
+                deleteContentButton.classList.remove('hidden');
+            } else if (userRole === 'user') {
+                 deleteContentButton.classList.add('hidden');
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        function handleSaveClick(event) {
+            const postId = event.target.dataset.id;
+            const title = document.getElementById('title-input').value;
+            const caption = document.getElementById('caption-input').value;
+            const hashtags = document.getElementById('hashtag-input').value;
+            const content = document.getElementById('content-text').textContent;
+
+            const postIndex = contentPlan.findIndex(p => p.id === postId);
+            if (postIndex !== -1) {
+                contentPlan[postIndex].title = title;
+                contentPlan[postIndex].caption = caption;
+                contentPlan[postIndex].hashtags = hashtags;
+                contentPlan[postIndex].content = content;
+                localStorage.setItem('contentPlan', JSON.stringify(contentPlan));
+                showMessage('Konten berhasil disimpan!');
+            }
+
+            modal.classList.add('hidden');
+            lateAlert.classList.remove('show');
+            const activeTab = document.querySelector('.tab-button.active');
+            if (activeTab) activeTab.click();
+        }
+        
+        function handleDeleteClick(event) {
+            if (userRole !== 'admin') {
+                showMessage('Anda tidak memiliki izin untuk menghapus konten.', true);
+                return;
+            }
+
+            const postId = event.target.dataset.id;
+            const postIndex = contentPlan.findIndex(p => p.id === postId);
+            if (postIndex !== -1) {
+                contentPlan.splice(postIndex, 1);
+                localStorage.setItem('contentPlan', JSON.stringify(contentPlan));
+                scheduledPosts.delete(postId);
+                localStorage.setItem('scheduledPosts', JSON.stringify([...scheduledPosts]));
+                reportData = reportData.filter(item => item.id !== postId);
+                localStorage.setItem('reportData', JSON.stringify(reportData));
+                showMessage('Konten berhasil dihapus!');
+            }
+            modal.classList.add('hidden');
+            lateAlert.classList.remove('show');
+            const activeTab = document.querySelector('.tab-button.active');
+            if (activeTab) activeTab.click();
+        }
+
+        function handleScheduleClick(event) {
+            const postId = event.target.dataset.id;
+            const post = contentPlan.find(p => p.id === postId);
+            if (post) {
+                post.is_scheduled = true;
+                scheduledPosts.add(postId);
+                localStorage.setItem('contentPlan', JSON.stringify(contentPlan));
+                localStorage.setItem('scheduledPosts', JSON.stringify([...scheduledPosts]));
+                
+                reportData.push({
+                    id: postId,
+                    title: post.title,
+                    scheduled_date: post.scheduled_date,
+                    post_date: new Date().toISOString()
+                });
+                localStorage.setItem('reportData', JSON.stringify(reportData));
+
+                showMessage('Konten berhasil dijadwalkan!');
+            }
+            modal.classList.add('hidden');
+            lateAlert.classList.remove('show');
+            const activeTab = document.querySelector('.tab-button.active');
+            if (activeTab) activeTab.click();
+        }
+
+        function displayAnalytics() {
+            if (analyticsData.instagram) {
+                const ig = analyticsData.instagram;
+                const tt = analyticsData.tiktok;
+                const totalPosts = contentPlan.length;
+
+                const engagementRateIG = ((ig.total_likes + ig.total_comments) / ig.followers) * 100;
+                const engagementRateTikTok = ((tt.total_likes + tt.total_comments) / tt.followers) * 100;
+                
+                let analyticsHTML = `
+                    <div class="p-6 text-[#004aad]">
+                        <h2 class="text-3xl font-bold mb-6 mt-12 text-center">Analitik Media Sosial</h2>
+                        ${userRole === 'admin' ? `
+                        <div class="flex justify-center mb-6">
+                            <button id="edit-analytics-button" class="px-6 py-3 bg-[#004aad] text-white rounded-full font-semibold hover:bg-blue-600 transition-colors duration-200">
+                                Edit Data Analitik
+                            </button>
+                        </div>
+                        ` : ''}
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                            <div class="bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
+                                <h3 class="text-2xl font-bold text-[#004aad] mb-4 text-center">Instagram</h3>
+                                <div class="space-y-4">
+                                    <div class="flex justify-between items-center text-[#004aad]">
+                                        <span class="font-semibold">Jumlah Pengikut:</span>
+                                        <span class="text-xl font-bold text-blue-600">${ig.followers.toLocaleString()}</span>
+                                    </div>
+                                    <div class="flex justify-between items-center text-[#004aad]">
+                                        <span class="font-semibold">Total Views:</span>
+                                        <span class="text-xl font-bold text-blue-600">${ig.total_views.toLocaleString()}</span>
+                                    </div>
+                                    <div class="flex justify-between items-center text-[#004aad]">
+                                        <span class="font-semibold">Total Likes:</span>
+                                        <span class="text-xl font-bold text-blue-600">${ig.total_likes.toLocaleString()}</span>
+                                    </div>
+                                    <div class="flex justify-between items-center text-[#004aad]">
+                                        <span class="font-semibold">Total Komentar:</span>
+                                        <span class="text-xl font-bold text-blue-600">${ig.total_comments.toLocaleString()}</span>
+                                    </div>
+                                    <div class="flex justify-between items-center text-[#004aad]">
+                                        <span class="font-semibold">Tingkat Engagement:</span>
+                                        <span class="text-xl font-bold text-purple-600">${engagementRateIG.toFixed(2)}%</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
+                                <h3 class="text-2xl font-bold text-[#004aad] mb-4 text-center">TikTok</h3>
+                                <div class="space-y-4">
+                                    <div class="flex justify-between items-center text-[#004aad]">
+                                        <span class="font-semibold">Jumlah Pengikut:</span>
+                                        <span class="text-xl font-bold text-blue-600">${tt.followers.toLocaleString()}</span>
+                                    </div>
+                                    <div class="flex justify-between items-center text-[#004aad]">
+                                        <span class="font-semibold">Total Views:</span>
+                                        <span class="text-xl font-bold text-blue-600">${tt.total_views.toLocaleString()}</span>
+                                    </div>
+                                    <div class="flex justify-between items-center text-[#004aad]">
+                                        <span class="font-semibold">Total Likes:</span>
+                                        <span class="text-xl font-bold text-blue-600">${tt.total_likes.toLocaleString()}</span>
+                                    </div>
+                                    <div class="flex justify-between items-center text-[#004aad]">
+                                        <span class="font-semibold">Total Komentar:</span>
+                                        <span class="text-xl font-bold text-blue-600">${tt.total_comments.toLocaleString()}</span>
+                                    </div>
+                                    <div class="flex justify-between items-center text-[#004aad]">
+                                        <span class="font-semibold">Tingkat Engagement:</span>
+                                        <span class="text-xl font-bold text-purple-600">${engagementRateTikTok.toFixed(2)}%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
+                            <h3 class="text-2xl font-bold text-[#004aad] mb-4 text-center">Perbandingan Konten</h3>
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full table-auto text-sm text-[#004aad]">
+                                    <thead class="bg-gray-100">
+                                        <tr>
+                                            <th class="px-4 py-2 text-left">Metrik</th>
+                                            <th class="px-4 py-2 text-center">Instagram</th>
+                                            <th class="px-4 py-2 text-center">TikTok</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="bg-white divide-y divide-gray-200">
+                                        <tr>
+                                            <td class="px-4 py-2 font-semibold">Likes per Post</td>
+                                            <td class="px-4 py-2 text-center">${(ig.total_likes / totalPosts).toFixed(0).toLocaleString()}</td>
+                                            <td class="px-4 py-2 text-center">${(tt.total_likes / totalPosts).toFixed(0).toLocaleString()}</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="px-4 py-2 font-semibold">Komentar per Post</td>
+                                            <td class="px-4 py-2 text-center">${(ig.total_comments / totalPosts).toFixed(0).toLocaleString()}</td>
+                                            <td class="px-4 py-2 text-center">${(tt.total_comments / totalPosts).toFixed(0).toLocaleString()}</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="px-4 py-2 font-semibold">Views per Post</td>
+                                            <td class="px-4 py-2 text-center">${(ig.total_views / totalPosts).toFixed(0).toLocaleString()}</td>
+                                            <td class="px-4 py-2 text-center">${(tt.total_views / totalPosts).toFixed(0).toLocaleString()}</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="px-4 py-2 font-semibold">Total Engagement</td>
+                                            <td class="px-4 py-2 text-center">${(ig.total_likes + ig.total_comments).toLocaleString()}</td>
+                                            <td class="px-4 py-2 text-center">${(tt.total_likes + tt.total_comments).toLocaleString()}</td>
+                                        </tr>
+                                        <tr>
+                                            <td class="px-4 py-2 font-semibold">Tingkat Engagement</td>
+                                            <td class="px-4 py-2 text-center">${engagementRateIG.toFixed(2)}%</td>
+                                            <td class="px-4 py-2 text-center">${engagementRateTikTok.toFixed(2)}%</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                contentDisplay.innerHTML = analyticsHTML;
+                contentNavContainer.classList.remove('visible-container');
+                
+                if (userRole === 'admin') {
+                    document.getElementById('edit-analytics-button').addEventListener('click', showAnalyticsModal);
+                }
+            } else {
+                contentDisplay.innerHTML = `<p class="p-6 text-center text-[#004aad]">Data analitik tidak ditemukan.</p>`;
+            }
+        }
+        
+        function showAnalyticsModal() {
+            if (userRole !== 'admin') {
+                showMessage("Anda tidak memiliki izin untuk mengedit data ini.", true);
+                return;
+            }
+            const ig = analyticsData.instagram;
+            const tt = analyticsData.tiktok;
+            
+            document.getElementById('ig-followers').value = ig.followers;
+            document.getElementById('ig-views').value = ig.total_views;
+            document.getElementById('ig-likes').value = ig.total_likes;
+            document.getElementById('ig-comments').value = ig.total_comments;
+            
+            document.getElementById('tt-followers').value = tt.followers;
+            document.getElementById('tt-views').value = tt.total_views;
+            document.getElementById('tt-likes').value = tt.total_likes;
+            document.getElementById('tt-comments').value = tt.total_comments;
+            
+            analyticsModal.classList.remove('hidden');
+        }
+
+        function saveAnalyticsData() {
+            if (userRole !== 'admin') {
+                showMessage("Anda tidak memiliki izin untuk mengedit data ini.", true);
+                return;
+            }
+            analyticsData = {
+                instagram: {
+                    followers: parseInt(document.getElementById('ig-followers').value),
+                    total_views: parseInt(document.getElementById('ig-views').value),
+                    total_likes: parseInt(document.getElementById('ig-likes').value),
+                    total_comments: parseInt(document.getElementById('ig-comments').value)
+                },
+                tiktok: {
+                    followers: parseInt(document.getElementById('tt-followers').value),
+                    total_views: parseInt(document.getElementById('tt-views').value),
+                    total_likes: parseInt(document.getElementById('tt-likes').value),
+                    total_comments: parseInt(document.getElementById('tt-comments').value)
+                }
+            };
+            localStorage.setItem('analyticsData', JSON.stringify(analyticsData));
+            showMessage("Data analitik berhasil diperbarui!");
+            analyticsModal.classList.add('hidden');
+            displayAnalytics();
+        }
+
+        function displayReport() {
+            let reportHTML = `
+                <div class="p-6 text-[#004aad]">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-3xl font-bold">Laporan Penjadwalan</h2>
+                        <button id="download-report-button" class="px-6 py-3 bg-[#004aad] text-white rounded-full font-semibold hover:bg-blue-600 transition-colors duration-200">
+                            Unduh Laporan
+                        </button>
+                    </div>
+                    <div class="bg-white p-6 rounded-xl shadow-md border border-gray-200">
+                        ${reportData.length > 0 ? `
+                            <ul class="space-y-4" id="report-list">
+                                ${reportData.map(item => {
+                                    const scheduledDate = new Date(item.scheduled_date).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
+                                    const postDate = new Date(item.post_date).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
+                                    const isLate = new Date(item.post_date) > new Date(item.scheduled_date);
+                                    const statusColor = isLate ? 'text-red-500' : 'text-green-500';
+                                    const statusText = isLate ? 'Terlambat' : 'Tepat Waktu';
+                                    const deleteButtonHtml = userRole === 'admin' ? 
+                                        `<button class="delete-report-item px-3 py-1 bg-red-500 text-white text-sm rounded-full font-semibold hover:bg-red-600 transition-colors duration-200" data-id="${item.id}">Hapus</button>` : '';
+
+                                    return `
+                                        <li class="p-4 rounded-lg bg-gray-100 shadow-sm flex justify-between items-center">
+                                            <div>
+                                                <h4 class="text-lg font-semibold">${item.title}</h4>
+                                                <p class="text-sm text-gray-600">Dijadwalkan: ${scheduledDate}</p>
+                                                <p class="text-sm text-gray-600">Terposting: ${postDate}</p>
+                                                <p class="text-sm font-bold ${statusColor}">Status: ${statusText}</p>
+                                            </div>
+                                            ${deleteButtonHtml}
+                                        </li>
+                                    `;
+                                }).join('')}
+                            </ul>
+                        ` : `
+                            <p class="text-lg text-center text-gray-500">Belum ada konten yang dijadwalkan.</p>
+                        `}
+                    </div>
+                </div>
+            `;
+            contentDisplay.innerHTML = reportHTML;
+            contentNavContainer.classList.remove('visible-container');
+            addContentButton.classList.add('hidden');
+            
+            if (reportData.length > 0) {
+                document.getElementById('download-report-button').addEventListener('click', downloadReport);
+                if (userRole === 'admin') {
+                    document.querySelectorAll('.delete-report-item').forEach(button => {
+                        button.addEventListener('click', (event) => {
+                            const postId = event.target.dataset.id;
+                            deleteReportItem(postId);
+                        });
+                    });
+                }
+            }
+        }
+        
+        function deleteReportItem(postId) {
+            reportData = reportData.filter(item => item.id !== postId);
+            localStorage.setItem('reportData', JSON.stringify(reportData));
+            
+            contentPlan = contentPlan.filter(post => post.id !== postId);
+            localStorage.setItem('contentPlan', JSON.stringify(contentPlan));
+
+            scheduledPosts.delete(postId);
+            localStorage.setItem('scheduledPosts', JSON.stringify([...scheduledPosts]));
+
+            showMessage("Item laporan dan konten terkait berhasil dihapus!");
+            displayReport();
+        }
+
+        function downloadReport() {
+            const header = "Judul,Tanggal Dijadwalkan,Tanggal Terposting,Status\n";
+            const csv = reportData.map(item => {
+                const scheduledDate = new Date(item.scheduled_date).toLocaleDateString('id-ID');
+                const postDate = new Date(item.post_date).toLocaleDateString('id-ID');
+                const status = new Date(item.post_date) > new Date(item.scheduled_date) ? 'Terlambat' : 'Tepat Waktu';
+                return `"${item.title}","${scheduledDate}","${postDate}","${status}"`;
+            }).join("\n");
+            
+            const fullCsv = header + csv;
+            
+            const blob = new Blob([fullCsv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute("download", "laporan_konten.csv");
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showMessage("Laporan berhasil diunduh!");
+        }
+
+        function displayUsage() {
+            contentDisplay.innerHTML = `
+                <div class="p-6 text-[#004aad]">
+                    <h2 class="text-3xl font-bold mb-6 text-center">Panduan Penggunaan</h2>
+                    <div class="bg-white p-6 rounded-2xl shadow-lg border border-gray-200">
+                        <div class="mb-6">
+                            <h3 class="text-xl font-bold mb-2">Panduan Warna</h3>
+                            <div class="flex items-center space-x-4">
+                                <div class="w-16 h-16 rounded-full bg-[#004aad] border-2 border-white"></div>
+                                <p class="text-lg font-semibold text-[#004aad]">Latar Belakang Utama: #004aad</p>
+                            </div>
+                            <div class="flex items-center space-x-4 mt-4">
+                                <div class="w-16 h-16 rounded-full bg-[#ffffff] border-2 border-gray-300"></div>
+                                <p class="text-lg font-semibold text-[#004aad]">Latar Belakang Sekunder & Teks: #ffffff</p>
+                            </div>
+                        </div>
+                        <div class="mb-6">
+                            <h3 class="text-xl font-bold mb-2">Aturan Penggunaan Warna</h3>
+                            <ul class="list-disc list-inside space-y-2 text-md text-gray-700">
+                                <li>Saat menggunakan **latar belakang biru (#004aad)**, gunakan **teks putih (#ffffff)**.</li>
+                                <li>Saat menggunakan **latar belakang putih (#ffffff)**, gunakan **teks biru (#004aad)**.</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-bold mb-2">Penggunaan Font</h3>
+                            <p class="text-md text-gray-700">Font yang digunakan adalah **Poppins** dan **General Sans**.</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+            contentNavContainer.classList.remove('visible-container');
+            addContentButton.classList.add('hidden');
+        }
+
+        function handleTabClick(event) {
+            const tabName = event.currentTarget.dataset.tab;
+            
+            tabButtons.forEach(button => {
+                button.classList.remove('active');
+            });
+            event.currentTarget.classList.add('active');
+            
+            monthButtonsContainer.innerHTML = '';
+            weekButtonsContainer.innerHTML = '';
+            contentNavContainer.classList.remove('visible-container');
+            lateAlert.classList.remove('show');
+
+            if (tabName === 'dashboard') {
+                displayDashboard();
+                addContentButton.classList.add('hidden');
+            } else if (tabName === 'content') {
+                displayMonthButtons();
+                contentDisplay.innerHTML = `<div class="p-6 text-center text-[#004aad]">
+                    <p class="text-lg font-semibold mb-4">Silakan pilih bulan dari menu di atas.</p>
+                </div>`;
+                addContentButton.classList.remove('hidden');
+            } else if (tabName === 'analytics') {
+                displayAnalytics();
+                addContentButton.classList.add('hidden');
+            } else if (tabName === 'report') {
+                displayReport();
+                addContentButton.classList.add('hidden');
+            } else if (tabName === 'usage') {
+                displayUsage();
+                addContentButton.classList.add('hidden');
+            }
+        }
+
+        // --- Fungsi untuk Date Picker ---
+        function renderDatePicker() {
+            const year = currentDatePickerDate.getFullYear();
+            const month = currentDatePickerDate.getMonth();
+            const firstDayOfMonth = new Date(year, month, 1);
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const startDayIndex = (firstDayOfMonth.getDay() + 6) % 7; // Adjust for Monday start
+
+            monthYearLabel.textContent = `${MONTHS[month]} ${year}`;
+            datePickerGrid.innerHTML = '';
+            createContentButton.classList.add('hidden');
+            selectedDate = null;
+
+            for (let i = 0; i < startDayIndex; i++) {
+                datePickerGrid.innerHTML += '<div></div>';
+            }
+
+            for (let day = 1; day <= daysInMonth; day++) {
+                const date = new Date(year, month, day);
+                const button = document.createElement('button');
+                button.textContent = day;
+                button.className = 'date-picker-button p-2 rounded-lg font-semibold w-12 h-12 flex items-center justify-center';
+                button.dataset.date = date.toISOString();
+                button.addEventListener('click', () => {
+                    document.querySelectorAll('.date-picker-button').forEach(btn => btn.classList.remove('selected'));
+                    button.classList.add('selected');
+                    selectedDate = date;
+                    createContentButton.classList.remove('hidden');
+                });
+                datePickerGrid.appendChild(button);
+            }
+            datePickerModal.classList.remove('hidden');
+        }
+
+        function handleAddContentClick() {
+            renderDatePicker();
+        }
+
+        function handleCreateContentClick() {
+            if (!selectedDate) {
+                showMessage("Pilih tanggal terlebih dahulu.", true);
+                return;
+            }
+            
+            const month = selectedDate.getMonth();
+            const day = selectedDate.getDate();
+            const newPost = {
+                id: crypto.randomUUID(),
+                title: "Konten Baru",
+                content: "Isi konten baru...",
+                caption: "Caption untuk konten baru",
+                hashtags: "#kontenbaru #planner",
+                category: "Lainnya",
+                is_scheduled: false,
+                scheduled_date: new Date(CURRENT_YEAR, month, day).toISOString(),
+                time: "00:00"
+            };
+
+            contentPlan.push(newPost);
+            localStorage.setItem('contentPlan', JSON.stringify(contentPlan));
+            showMessage("Konten baru berhasil ditambahkan!");
+            datePickerModal.classList.add('hidden');
+            showModal(newPost);
+            
+            const activeMonthButton = document.querySelector(`.month-button[data-month='${month}']`);
+            if (activeMonthButton) {
+                activeMonthButton.click();
+            }
+        }
+
+
+        // Event Listeners
+        loginButton.addEventListener('click', handleLogin);
+        logoutButton.addEventListener('click', handleLogout);
+        tabButtons.forEach(button => {
+            button.addEventListener('click', handleTabClick);
+        });
+        addContentButton.addEventListener('click', handleAddContentClick);
+        deleteContentButton.addEventListener('click', handleDeleteClick);
+        saveAnalyticsButton.addEventListener('click', saveAnalyticsData);
+        
+        document.getElementById('close-modal-button').addEventListener('click', () => {
+            modal.classList.add('hidden');
+            lateAlert.classList.remove('show');
+        });
+
+        document.getElementById('close-analytics-modal').addEventListener('click', () => {
+            analyticsModal.classList.add('hidden');
+        });
+
+        document.getElementById('save-content-button').addEventListener('click', handleSaveClick);
+        document.getElementById('schedule-content-button').addEventListener('click', handleScheduleClick);
+        
+        // Date Picker Event Listeners
+        document.getElementById('prev-month').addEventListener('click', () => {
+            currentDatePickerDate.setMonth(currentDatePickerDate.getMonth() - 1);
+            renderDatePicker();
+        });
+        document.getElementById('next-month').addEventListener('click', () => {
+            currentDatePickerDate.setMonth(currentDatePickerDate.getMonth() + 1);
+            renderDatePicker();
+        });
+        document.getElementById('close-date-picker-modal').addEventListener('click', () => {
+            datePickerModal.classList.add('hidden');
+        });
+        createContentButton.addEventListener('click', handleCreateContentClick);
+
+        document.addEventListener('DOMContentLoaded', () => {
+            createInitialContentPlan();
+            createInitialAnalyticsData();
+            
+            currentUser = JSON.parse(localStorage.getItem('currentUser'));
+            userRole = localStorage.getItem('userRole');
+            
+            if (currentUser && userRole) {
+                updateUIForAuth(true);
+            } else {
+                loadingScreen.classList.add('hidden');
+                loginScreen.classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
